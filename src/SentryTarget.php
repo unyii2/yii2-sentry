@@ -18,6 +18,7 @@ use Sentry\Severity;
 use Sentry\State\Scope;
 use Throwable;
 use Yii;
+use yii\base\InvalidConfigException;
 use yii\helpers\ArrayHelper;
 use yii\log\Logger;
 use yii\log\Target;
@@ -47,10 +48,16 @@ class SentryTarget extends Target
      * @var callable Callback function that can modify extra's array
      */
     public $extraCallback;
+
     /**
      * @var callable Callback function that can modify tags array
      */
     public $tagsCallback;
+
+    /**
+     * @var callable Callback function that can modify user array
+     */
+    public $userCallback;
 
     /**
      * @inheritDoc
@@ -112,11 +119,7 @@ class SentryTarget extends Target
             }
 
             try {
-                /** @var User $user */
-                $user = Yii::$app->has('user', true) ? Yii::$app->get('user', false) : null;
-                if ($user && ($identity = $user->getIdentity(false))) {
-                    $data['userData']['id'] = $identity->getId();
-                }
+                $data = $this->execUserCallBack($data);
             } catch (Throwable $e) {}
 
             \Sentry\withScope(function (Scope $scope) use ($text, $level, $data) {
@@ -203,7 +206,7 @@ class SentryTarget extends Target
      *
      * @return array
      */
-    public function runTagsCallback($text, $data)
+    public function runTagsCallback($text, $data): array
     {
         if (is_callable($this->tagsCallback)) {
             $data['tags'] = call_user_func($this->tagsCallback, $text, $data['tags'] ?? []);
@@ -258,5 +261,28 @@ class SentryTarget extends Target
             default:
                 return Severity::info();
         }
+    }
+
+    /**
+     * @param $text
+     * @param array $data
+     * @return array
+     * @throws InvalidConfigException
+     * @throws Throwable
+     */
+    public function execUserCallBack($text, array $data): array
+    {
+
+        if (is_callable($this->userCallback)) {
+            $data['userData'] = call_user_func($this->userCallback, $text, $data['userData'] ?? []);
+            return $data;
+        }
+
+        /** @var User $user */
+        $user = Yii::$app->has('user', true) ? Yii::$app->get('user', false) : null;
+        if ($user && ($identity = $user->getIdentity(false))) {
+            $data['userData']['id'] = $identity->getId();
+        }
+        return $data;
     }
 }
