@@ -119,7 +119,7 @@ class SentryTarget extends Target
             }
 
             try {
-                $data = $this->execUserCallBack($data);
+                $data = $this->runUserCallBack($data);
             } catch (Throwable $e) {}
 
             \Sentry\withScope(function (Scope $scope) use ($text, $level, $data) {
@@ -152,6 +152,7 @@ class SentryTarget extends Target
                     $data['extra']['context'] = parent::getContextMessage();
                 }
 
+                $data = $this->runUserCallBack($text, $data);
                 $scope->setUser($data['userData']);
                 
                 $data = $this->runExtraCallback($text, $data);
@@ -213,7 +214,30 @@ class SentryTarget extends Target
         }
 
         return $data;
-    }    
+    }
+
+    /**
+     * @param $text
+     * @param array $data
+     * @return array
+     * @throws InvalidConfigException
+     * @throws Throwable
+     */
+    public function runUserCallBack($text, $data): array
+    {
+
+        if (is_callable($this->userCallback)) {
+            $data['userData'] = call_user_func($this->userCallback, $text, $data['userData'] ?? []);
+            return $data;
+        }
+
+        /** @var User $user */
+        $user = Yii::$app->has('user', true) ? Yii::$app->get('user', false) : null;
+        if ($user && ($identity = $user->getIdentity(false))) {
+            $data['userData']['id'] = $identity->getId();
+        }
+        return $data;
+    }
     
     /**
      * Returns the text display of the specified level for the Sentry.
@@ -261,28 +285,5 @@ class SentryTarget extends Target
             default:
                 return Severity::info();
         }
-    }
-
-    /**
-     * @param $text
-     * @param array $data
-     * @return array
-     * @throws InvalidConfigException
-     * @throws Throwable
-     */
-    public function execUserCallBack($text, array $data): array
-    {
-
-        if (is_callable($this->userCallback)) {
-            $data['userData'] = call_user_func($this->userCallback, $text, $data['userData'] ?? []);
-            return $data;
-        }
-
-        /** @var User $user */
-        $user = Yii::$app->has('user', true) ? Yii::$app->get('user', false) : null;
-        if ($user && ($identity = $user->getIdentity(false))) {
-            $data['userData']['id'] = $identity->getId();
-        }
-        return $data;
     }
 }
