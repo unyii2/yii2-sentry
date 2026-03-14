@@ -25,6 +25,10 @@ use yii\log\Target;
 use yii\web\Request;
 use yii\web\User;
 
+use function Sentry\captureEvent;
+use function Sentry\captureException;
+use function Sentry\withScope;
+
 /**
  * SentryTarget records log messages in a Sentry.
  *
@@ -119,11 +123,14 @@ class SentryTarget extends Target
             }
 
             try {
-                $data = $this->runUserCallBack($data);
+                $data = $this->runUserCallBack($text, $data);
             } catch (Throwable $e) {}
 
-            \Sentry\withScope(function (Scope $scope) use ($text, $level, $data) {
-                if (is_array($text)) {
+            withScope(function (Scope $scope) use ($text, $level, $data) {
+                if ($text instanceof Throwable && method_exists($text, 'getExtraData')) {
+                    $data['exception'] = $text;
+                    $data['extra']['data'] = $text->getExtraData();
+                } elseif (is_array($text)) {
                     if (isset($text['msg'])) {
                         $data['message'] = (string)$text['msg'];
                         unset($text['msg']);
@@ -167,14 +174,14 @@ class SentryTarget extends Target
                     }
                 }
 
-                if ($text instanceof Throwable) {
-                    \Sentry\captureException($text);
+                if ($text instanceof Throwable && !method_exists($text, 'getExtraData')) {
+                    captureException($text);
                 } else {
                     $event = Event::createEvent();
                     $event->setMessage($data['message']);
                     $event->setLevel($this->getLogLevel($level));
 
-                    \Sentry\captureEvent($event, EventHint::fromArray(array_filter([
+                    captureEvent($event, EventHint::fromArray(array_filter([
                         'exception' => $data['exception'] ?? null,
                     ])));
                 }
