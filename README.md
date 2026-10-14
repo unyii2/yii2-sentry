@@ -11,6 +11,10 @@
 composer require notamedia/yii2-sentry
 ```
 
+The `master` branch uses `sentry/sentry:^4.0` directly, replacing the
+`sentry/sdk:^3.0` dependency. The Yii log target configuration remains the same.
+Install the merged branch with `notamedia/yii2-sentry: dev-master`.
+
 Add target class in the application config:
 
 ```php
